@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MySimpleAgent</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">✦</span><span>MySimpleAgent</span></div>
+      <button class="new-chat" id="new-chat">＋ 新建会话</button>
+      <div class="sidebar-label">会话</div>
+      <div class="conversation-item active">新的对话</div>
+      <div class="sidebar-footer">后端接口：<code>/api/chat</code></div>
+    </aside>
+
+    <section class="chat-panel">
+      <header class="chat-header">
+        <div><h1>新的对话</h1><p>与你的 Agent 交流</p></div>
+        <span class="status"><i></i> 已连接</span>
+      </header>
+
+      <div class="messages" id="messages">
+        <div class="welcome"><div class="welcome-icon">✦</div><h2>有什么可以帮你？</h2><p>发送消息开始一次新的会话。</p></div>
+      </div>
+
+      <form class="composer" id="composer">
+        <textarea id="message-input" rows="1" placeholder="输入消息..." aria-label="消息"></textarea>
+        <button type="submit" id="send-button" aria-label="发送">↑</button>
+      </form>
+      <p class="hint">Enter 发送 · Shift + Enter 换行</p>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
