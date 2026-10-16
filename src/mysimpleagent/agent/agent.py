@@ -1,7 +1,7 @@
 import json
 
-from src.context.context import Context
-from src.tools.tool_repository import ToolRepository
+from ..context.context import Context
+from ..tools.tool_repository import ToolRepository
 
 
 class Agent:
@@ -18,7 +18,8 @@ class Agent:
     def run(self, input_text: str, context: Context):
         context.add_message("user", input_text)
 
-        for _ in range(self.max_tool_rounds):
+        tool_rounds = 0
+        while True:
             response = self.llm.chat(
                 context.messages,
                 tools=self.tools.list_tools(),
@@ -27,7 +28,11 @@ class Agent:
             message = response.choices[0].message
             tool_calls = getattr(message, "tool_calls", None) or []
             if not tool_calls:
+                context.add_message("assistant", getattr(message, "content", None) or "")
                 return response
+
+            if tool_rounds >= self.max_tool_rounds:
+                raise RuntimeError("Maximum tool call rounds exceeded.")
 
             context.messages.append({
                 "role": "assistant",
@@ -46,14 +51,17 @@ class Agent:
             })
 
             for call in tool_calls:
-                arguments = json.loads(call.function.arguments)
-                result = self.tools.call(call.function.name, **arguments)
-                if not isinstance(result, str):
-                    result = json.dumps(result, ensure_ascii=False)
+                try:
+                    arguments = json.loads(call.function.arguments)
+                    result = self.tools.call(call.function.name, **arguments)
+                    if not isinstance(result, str):
+                        result = json.dumps(result, ensure_ascii=False)
+                except Exception as error:
+                    result = f"Tool error: {error}"
                 context.messages.append({
                     "role": "tool",
                     "tool_call_id": call.id,
                     "content": result,
                 })
 
-        raise RuntimeError("Maximum tool call rounds exceeded.")
+            tool_rounds += 1

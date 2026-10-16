@@ -1,6 +1,6 @@
 import unittest
 
-from src.llm.model_info import get_model_metadata
+from mysimpleagent.llm.model_info import get_model_metadata
 
 
 class GetModelMetadataTest(unittest.TestCase):

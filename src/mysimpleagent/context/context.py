@@ -17,8 +17,9 @@ class Context:
 
     def load_from_file(self, file_path: str):
         with open(file_path, "r", encoding="utf-8") as f:
-            self.messages = []
+            messages = []
             for line in f:
                 if line.strip():
-                    self.messages.append(json.loads(line))
+                    messages.append(json.loads(line))
+        self.messages = messages
     

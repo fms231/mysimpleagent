@@ -1,5 +1,5 @@
-from src.agent.agent import Agent
-from src.context.context import Context
+from ..agent.agent import Agent
+from ..context.context import Context
 
 
 class Conversation:

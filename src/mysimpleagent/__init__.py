@@ -1,7 +1,7 @@
-from src.agent.agent import Agent
-from src.conversation.conversation import Conversation
-from src.llm.llm import LLM
-from src.tools.tool_repository import ToolRepository
+from .agent.agent import Agent
+from .conversation.conversation import Conversation
+from .llm.llm import LLM
+from .tools.tool_repository import ToolRepository
 
 
 def main() -> Conversation:

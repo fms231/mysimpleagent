@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import Mock
 
-from src.context.context import Context
-from src.conversation.conversation import Conversation
+from mysimpleagent.context.context import Context
+from mysimpleagent.conversation.conversation import Conversation
 
 
 class ConversationTest(unittest.TestCase):

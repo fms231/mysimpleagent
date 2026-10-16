@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 
-from src.context.context import Context
+from mysimpleagent.context.context import Context
 
 
 def test_add_message():
@@ -27,3 +27,19 @@ def test_save_and_load_messages():
     loaded_context.load_from_file(str(file_path))
 
     assert loaded_context.messages == context.messages
+
+
+def test_load_failure_keeps_existing_messages():
+    context = Context()
+    context.add_message("user", "已有消息")
+    file_path = Path(__file__).with_name("invalid_context_messages.txt")
+    file_path.write_text('{"role": "user", "content": "新消息"}\n坏 JSON\n', encoding="utf-8")
+
+    try:
+        context.load_from_file(str(file_path))
+    except json.JSONDecodeError:
+        pass
+    finally:
+        file_path.unlink()
+
+    assert context.messages == [{"role": "user", "content": "已有消息"}]

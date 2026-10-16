@@ -26,24 +26,32 @@ class LLM(LLMConfig):
         if max_tokens is not None:
             self.max_tokens = max_tokens
         else:
-            self.max_tokens = get_model_metadata(self.model).get("max_tokens", 0)
+            try:
+                self.max_tokens = get_model_metadata(self.model).get("max_tokens")
+            except Exception:
+                self.max_tokens = None
 
     def get_model_metadata(self) -> dict:
         """Return model metadata provided by LiteLLM for the current model."""
         return get_model_metadata(self.model)
 
-    def get_max_tokens(self) -> int:
+    def get_max_tokens(self) -> int | None:
         """Return the maximum number of tokens for the current model."""
         return self.max_tokens
 
     def chat(self, messages: list[dict], **kwargs):
         """Send a chat request through LiteLLM and return its response."""
-        return litellm.completion(
-            model=self.model,
-            messages=messages,
-            api_base=self.base_url,
-            api_key=self.api_key,
-            max_tokens=self.max_tokens,
+        params = {
+            "model": self.model,
+            "messages": messages,
+            "api_base": self.base_url,
+            "api_key": self.api_key,
             **kwargs,
+        }
+        if self.max_tokens is not None and "max_tokens" not in kwargs:
+            params["max_tokens"] = self.max_tokens
+
+        return litellm.completion(
+            **params,
         )
         

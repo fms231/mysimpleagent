@@ -2,10 +2,10 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from src.agent.agent import Agent
-from src.context.context import Context
-from src.tools.tool_repository import ToolRepository
-from src.tools.tool_schema import ToolSchema
+from mysimpleagent.agent.agent import Agent
+from mysimpleagent.context.context import Context
+from mysimpleagent.tools.tool_repository import ToolRepository
+from mysimpleagent.tools.tool_schema import ToolSchema
 
 
 class AgentTest(unittest.TestCase):
@@ -28,12 +28,20 @@ class AgentTest(unittest.TestCase):
         llm = Mock()
         llm.chat.return_value = response
 
-        result = Agent(llm, repository).run("hello", Context())
+        context = Context()
+        result = Agent(llm, repository).run("hello", context)
 
         self.assertIs(result, response)
         llm.chat.assert_called_once_with(
-            [{"role": "user", "content": "hello"}],
-            tools=[{"name": "add", "description": "Add two numbers.", "parameters": {"type": "object"}}],
+            context.messages,
+            tools=[{
+                "type": "function",
+                "function": {
+                    "name": "add",
+                    "description": "Add two numbers.",
+                    "parameters": {"type": "object"},
+                },
+            }],
         )
 
     def test_run_keeps_messages_in_context(self):
@@ -51,7 +59,9 @@ class AgentTest(unittest.TestCase):
 
         self.assertEqual(context.messages, [
             {"role": "user", "content": "first"},
+            {"role": "assistant", "content": ""},
             {"role": "user", "content": "second"},
+            {"role": "assistant", "content": ""},
         ])
         self.assertEqual(llm.chat.call_args_list[1].args[0], context.messages)
 
@@ -69,16 +79,16 @@ class AgentTest(unittest.TestCase):
         llm = Mock()
         llm.chat.side_effect = [first_response, final_response]
 
-        result = Agent(llm, repository).run("add 2 and 3", Context())
+        result = Agent(llm, repository, max_tool_rounds=1).run("add 2 and 3", Context())
 
         self.assertIs(result, final_response)
         self.assertEqual(llm.chat.call_count, 2)
         second_messages = llm.chat.call_args_list[1].args[0]
-        self.assertEqual(second_messages[-1], {
+        self.assertIn({
             "role": "tool",
             "tool_call_id": "call-1",
             "content": "5",
-        })
+        }, second_messages)
 
 
 if __name__ == "__main__":

@@ -15,9 +15,12 @@ class ToolRepository():
         result = []
         for tool in self.tools.values():
             result.append({
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": tool.parameters,
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.parameters,
+                },
             })
         return result
 

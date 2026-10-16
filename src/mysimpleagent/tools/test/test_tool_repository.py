@@ -1,7 +1,7 @@
 import unittest
 
-from src.tools.tool_repository import ToolRepository
-from src.tools.tool_schema import ToolSchema
+from mysimpleagent.tools.tool_repository import ToolRepository
+from mysimpleagent.tools.tool_schema import ToolSchema
 
 
 class ToolRepositoryTest(unittest.TestCase):
@@ -26,6 +26,14 @@ class ToolRepositoryTest(unittest.TestCase):
         repository.add_tool(tool)
 
         self.assertIs(repository.get_tool("add"), tool)
+        self.assertEqual(repository.list_tools(), [{
+            "type": "function",
+            "function": {
+                "name": "add",
+                "description": "Add two numbers.",
+                "parameters": tool.parameters,
+            },
+        }])
         self.assertEqual(repository.call("add", a=2, b=3), 5)
 
 
