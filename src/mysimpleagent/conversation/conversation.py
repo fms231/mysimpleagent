@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -15,6 +16,8 @@ class Conversation:
     ):
         self.agent = agent
         self.session_id = session_id or uuid4().hex
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.session_id):
+            raise ValueError("Invalid session_id")
         self.sessions_dir = Path(sessions_dir)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.session_file = self.sessions_dir / f"{self.session_id}.jsonl"

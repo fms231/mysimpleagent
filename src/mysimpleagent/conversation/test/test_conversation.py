@@ -40,6 +40,10 @@ class ConversationTest(unittest.TestCase):
             {"role": "assistant", "content": "你好"},
         ])
 
+    def test_rejects_unsafe_session_id(self):
+        with self.assertRaises(ValueError):
+            Conversation(Mock(), session_id="../../outside")
+
 
 if __name__ == "__main__":
     unittest.main()
