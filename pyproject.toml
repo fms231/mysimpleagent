@@ -1,0 +1,20 @@
+[project]
+name = "mysimpleagent"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "fms231"}
+]
+requires-python = ">=3.13"
+dependencies = [
+    "litellm>=1.105.1",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+mysimpleagent = "mysimpleagent:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
