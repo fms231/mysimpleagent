@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock
 
 from mysimpleagent.context.context import Context
@@ -17,6 +19,30 @@ class ConversationTest(unittest.TestCase):
 
         self.assertIs(result, response)
         agent.run.assert_called_once_with("你好", context)
+
+    def test_send_persists_context_by_session_id(self):
+        agent = Mock()
+        agent.run.side_effect = lambda text, context: (
+            context.add_message("user", text),
+            context.add_message("assistant", "你好"),
+        )[-1]
+
+        with TemporaryDirectory() as directory:
+            conversation = Conversation(agent, sessions_dir=directory, session_id="session-1")
+            conversation.send("你好")
+            path = Path(directory) / "session-1.jsonl"
+
+            self.assertTrue(path.exists())
+            restored = Conversation(agent, sessions_dir=directory, session_id="session-1")
+
+        self.assertEqual(restored.context.messages, [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "你好"},
+        ])
+
+    def test_rejects_unsafe_session_id(self):
+        with self.assertRaises(ValueError):
+            Conversation(Mock(), session_id="../../outside")
 
 
 if __name__ == "__main__":
