@@ -4,9 +4,10 @@ import json
 class Context:
     messages: list[dict[str, str]]
 
-    def __init__(self, system_prompt: str | None = None):
+    def __init__(self, system_prompt: str | None = None, context_strategy=None):
         self.id = 0
         self.messages = []
+        self.context_strategy = context_strategy
         if system_prompt is not None:
             self.add_message("system", system_prompt)
 
@@ -14,6 +15,8 @@ class Context:
         message = {"id": self.id, "role": role, "content": content, **fields}
         self.id += 1
         self.messages.append(message)
+        if self.context_strategy is not None:
+            self.context_strategy.check(self)
 
     def replace_user_message(self, message_id: int, content: str):
         message_index = next(

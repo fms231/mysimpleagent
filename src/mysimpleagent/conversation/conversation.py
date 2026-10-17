@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from ..agent.agent import Agent
 from ..context.context import Context
+from ..context.context_strategy import ContextStrategy
 
 
 class Conversation:
@@ -25,10 +26,19 @@ class Conversation:
 
         if context is not None:
             self.context = context
+            if self.context.context_strategy is None:
+                self.context.context_strategy = self._make_context_strategy()
         else:
-            self.context = Context()
+            self.context = Context(context_strategy=self._make_context_strategy())
             if self.session_file.exists():
                 self.context.load_from_file(str(self.session_file))
+
+    def _make_context_strategy(self):
+        model = getattr(self.agent.llm, "model", None)
+        max_context = getattr(self.agent.llm, "max_context", None)
+        if model and isinstance(max_context, (int, float)) and max_context > 0:
+            return ContextStrategy(model, max_context)
+        return None
 
     def send(self, input_text: str):
         previous_messages = deepcopy(self.context.messages)

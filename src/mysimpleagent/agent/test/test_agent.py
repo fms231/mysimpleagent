@@ -1,7 +1,6 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
-from unittest.mock import patch
 
 from mysimpleagent.agent.agent import Agent
 from mysimpleagent.context.context import Context
@@ -55,22 +54,6 @@ class AgentTest(unittest.TestCase):
                 },
             }],
         )
-
-    @patch("mysimpleagent.agent.agent.litellm.token_counter", return_value=80)
-    def test_logs_error_when_context_reaches_eighty_percent(self, _token_counter):
-        response = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None))]
-        )
-        llm = Mock()
-        llm.model = "custom/model"
-        llm.max_context = 100
-        llm.chat.return_value = response
-
-        with self.assertLogs("mysimpleagent.agent.agent", level="ERROR") as logs:
-            Agent(llm, self._repository()).run(Context())
-
-        self.assertEqual(len(logs.records), 1)
-        self.assertIn("80.0%", logs.output[0])
 
     def test_run_keeps_messages_in_context(self):
         repository = self._repository()

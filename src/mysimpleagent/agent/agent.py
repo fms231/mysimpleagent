@@ -1,8 +1,6 @@
 import json
 import logging
 
-import litellm
-
 from ..context.context import Context
 from ..tools.base_tools import BaseTools
 from ..tools.tool_repository import ToolRepository
@@ -25,10 +23,7 @@ class Agent:
         self.hooks = hooks or []
 
     def run(self, context: Context):
-        context_warning_logged = False
         while True:
-            if not context_warning_logged:
-                context_warning_logged = self._log_context_threshold(context)
             response = self.llm.chat(
                 context.model_messages(),
                 tools=self.tools.list_tools(),
@@ -104,24 +99,4 @@ class Agent:
                     break
                 context.add_message("tool", result, tool_call_id=call.id)
 
-    def _log_context_threshold(self, context: Context) -> bool:
-        max_context = getattr(self.llm, "max_context", None)
-        if not isinstance(max_context, (int, float)) or max_context <= 0:
-            return False
-        try:
-            input_tokens = litellm.token_counter(
-                model=self.llm.model,
-                messages=context.model_messages(),
-            )
-        except Exception:
-            return False
-        if input_tokens >= max_context * 0.8:
-            logger.error(
-                "Context usage reached %.1f%% (%s/%s tokens)",
-                input_tokens / max_context * 100,
-                input_tokens,
-                max_context,
-            )
-            return True
-        return False
 
