@@ -22,8 +22,10 @@ def test_system_prompt_is_first_message():
     context.add_message("user", "你好")
 
     assert context.messages == [
-        {"id": 0, "role": "system", "content": "你是一个简洁的助手"},
-        {"id": 1, "role": "user", "content": "你好"},
+        {"id": 0, "role": "user", "content": "你好"},
+    ]
+    assert context.model_message == [
+        {"role": "user", "content": "你好"},
     ]
     assert context.model_messages()[0] == {
         "role": "system",
@@ -47,6 +49,33 @@ def test_save_and_load_messages():
 
     assert loaded_context.messages == context.messages
     assert loaded_context.id == 2
+
+
+def test_save_and_load_preserves_system_prompt(tmp_path):
+    file_path = tmp_path / "context.jsonl"
+    context = Context(system_prompt="你是一个简洁的助手")
+    context.add_message("user", "你好")
+
+    context.save_to_file(str(file_path))
+    loaded_context = Context()
+    loaded_context.load_from_file(str(file_path))
+
+    assert loaded_context.system_prompt == "你是一个简洁的助手"
+    assert loaded_context.model_messages() == context.model_messages()
+
+
+def test_model_messages_are_independent_copies():
+    context = Context()
+    context.add_message(
+        "assistant",
+        None,
+        tool_calls=[{"function": {"name": "read_file"}}],
+    )
+
+    returned = context.model_messages()
+    returned[0]["tool_calls"][0]["function"]["name"] = "changed"
+
+    assert context.model_messages()[0]["tool_calls"][0]["function"]["name"] == "read_file"
 
 
 def test_load_failure_keeps_existing_messages():

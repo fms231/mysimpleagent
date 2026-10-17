@@ -83,6 +83,49 @@ tools.add_tool(tool)
 
 `Agent` 会处理模型返回的工具调用，并将工具结果继续交给模型生成最终回答。
 
+### MCP 工具
+
+项目提供 `MCPToolRepository`，可以将 MCP Server 暴露的工具适配成当前 Agent 使用的工具格式。依赖已经包含官方 MCP Python SDK：
+
+```python
+from mcp import Client
+from mysimpleagent import Agent, LLM, MCPToolRepository
+
+
+async def create_agent():
+    client = Client("http://localhost:8000/mcp")
+    tools = MCPToolRepository(client)
+    await tools.connect()
+    return Agent(LLM(), tools), tools
+```
+
+`connect()` 会完成 MCP 握手并调用 `list_tools()`，之后 `Agent` 会通过 `MCPToolRepository.call()` 将工具调用转发给 MCP Server。使用完成后调用：
+
+```python
+await tools.close()
+```
+
+如果需要在异步 MCP 事件循环中直接调用工具，使用 `await tools.async_call(name, **arguments)`。同步的 `call()` 会把请求调度到仓库维护的 MCP 事件循环，不会在该事件循环上执行阻塞等待。
+
+当前 `Agent.run()` 是同步方法，因此应在同步调用线程中使用 MCP 工具仓库；MCP 调用会在适配层内部等待异步结果。
+
+## 可观测性
+
+可以为 `Agent` 传入 `Observability`，通过生命周期事件处理器观察模型和工具调用：
+
+```python
+from mysimpleagent import Agent, Observability
+from mysimpleagent.observability import LoggingObservabilityHandler
+
+observability = Observability(
+    handlers=[LoggingObservabilityHandler()],
+    max_events=1000,  # 只保留最近 1000 个事件；默认 None 表示不限制
+)
+agent = Agent(llm, tools, observability=observability)
+```
+
+可观测性会记录 `on_llm_start`、`on_llm_end`、`on_llm_error`，以及对应的工具调用事件。事件也会保存在 `observability.events` 中，便于接入自定义处理器。设置 `max_events=0` 可以关闭事件留存，只执行处理器。
+
 ## 会话持久化
 
 每个 `Conversation` 都有独立的 `session_id`。每次调用 `send()` 后，消息会保存到：
