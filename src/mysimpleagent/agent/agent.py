@@ -59,24 +59,41 @@ class Agent:
             for call in tool_calls:
                 result = None
                 for attempt in range(self.max_tool_rounds + 1):
+                    arguments = {}
                     try:
                         arguments = json.loads(call.function.arguments)
                         for hook in self.hooks:
                             hook.before_tool_call(call.function.name, arguments, context)
-                        result = self.tools.call(call.function.name, **arguments)
-                        for hook in self.hooks:
-                            hook.after_tool_call(call.function.name, arguments, result, context)
-                        if not isinstance(result, str):
-                            result = json.dumps(result, ensure_ascii=False)
-                        break
                     except Exception as error:
                         for hook in self.hooks:
-                            hook.on_tool_error(call.function.name, locals().get("arguments", {}), error, context)
+                            hook.on_tool_error(call.function.name, arguments, error, context)
                         if attempt == self.max_tool_rounds:
                             result = (
                                 f"Tool '{call.function.name}' is unavailable after "
                                 f"{self.max_tool_rounds} failed retries: {error}"
                             )
+                        continue
+
+                    try:
+                        result = self.tools.call(call.function.name, **arguments)
+                    except Exception as error:
+                        for hook in self.hooks:
+                            hook.on_tool_error(call.function.name, arguments, error, context)
+                        if attempt == self.max_tool_rounds:
+                            result = (
+                                f"Tool '{call.function.name}' is unavailable after "
+                                f"{self.max_tool_rounds} failed retries: {error}"
+                            )
+                        continue
+
+                    for hook in self.hooks:
+                        try:
+                            hook.after_tool_call(call.function.name, arguments, result, context)
+                        except Exception:
+                            logger.exception("after_tool_call hook failed for tool '%s'", call.function.name)
+                    if not isinstance(result, str):
+                        result = json.dumps(result, ensure_ascii=False)
+                    break
                 context.add_message("tool", result, tool_call_id=call.id)
 
     def _log_context_threshold(self, context: Context) -> bool:

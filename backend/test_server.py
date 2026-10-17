@@ -21,6 +21,18 @@ class SessionLockTest(unittest.TestCase):
 
         self.assertEqual(model_context_limit("gpt-6-luna"), 1050000)
 
+    @patch("backend.server.get_model_metadata", return_value={
+        "max_input_tokens": 900,
+        "max_output_tokens": 100,
+        "max_context_window": 800,
+    })
+    def test_model_context_limit_prefers_context_window(self, _get_metadata):
+        self.assertEqual(model_context_limit("custom/model"), 800)
+
+    @patch("backend.server.get_model_metadata", return_value={"max_input_tokens": 900})
+    def test_model_context_limit_falls_back_to_input_limit(self, _get_metadata):
+        self.assertEqual(model_context_limit("custom/model"), 900)
+
     def test_requests_for_same_session_share_lock(self):
         self.assertIs(get_session_lock("session-1"), get_session_lock("session-1"))
 

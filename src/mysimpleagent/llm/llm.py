@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 
 from .llm_config import LLMConfig
-from .model_info import get_model_metadata
+from .model_info import get_model_context_limit, get_model_metadata
 
 load_dotenv()
 
@@ -29,11 +29,7 @@ class LLM(LLMConfig):
             metadata = {}
         self.max_input_tokens = metadata.get("max_input_tokens")
         self.max_output_tokens = metadata.get("max_output_tokens")
-        model_context = metadata.get("max_context_window")
-        if model_context is None and self.max_input_tokens and self.max_output_tokens:
-            model_context = self.max_input_tokens + self.max_output_tokens
-        if model_context is None:
-            model_context = metadata.get("max_tokens")
+        model_context = get_model_context_limit(metadata)
         if max_context is not None and model_context is not None and max_context > model_context:
             raise ValueError("max_context exceeds model context limit")
         self.max_context = max_context if max_context is not None else model_context

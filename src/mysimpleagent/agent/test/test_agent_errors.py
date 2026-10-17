@@ -8,6 +8,66 @@ from mysimpleagent.tools.tool_repository import ToolRepository
 
 
 class AgentToolErrorTest(unittest.TestCase):
+    def test_after_hook_error_does_not_repeat_successful_tool(self):
+        call = SimpleNamespace(
+            id="side-effect",
+            function=SimpleNamespace(name="write", arguments='{"value": 1}'),
+        )
+        tool_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[call]))]
+        )
+        final_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))]
+        )
+        llm = Mock()
+        llm.chat.side_effect = [tool_response, final_response]
+        tools = ToolRepository()
+        tool = Mock()
+        tool.name = "write"
+        tool.description = "write with side effects"
+        tool.parameters = {"type": "object"}
+        tool.func.return_value = "written"
+        tools.add_tool(tool)
+        hook = Mock()
+        hook.after_tool_call.side_effect = RuntimeError("post-processing failed")
+
+        Agent(llm, tools, max_tool_rounds=2, hooks=[hook]).run(Context())
+
+        tool.func.assert_called_once_with(value=1)
+
+    def test_error_hook_gets_arguments_from_current_invalid_call(self):
+        calls = [
+            SimpleNamespace(
+                id="first",
+                function=SimpleNamespace(name="first", arguments='{"value": 1}'),
+            ),
+            SimpleNamespace(
+                id="bad-json",
+                function=SimpleNamespace(name="second", arguments="not-json"),
+            ),
+        ]
+        response_with_tools = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=calls))]
+        )
+        final_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))]
+        )
+        llm = Mock()
+        llm.chat.side_effect = [response_with_tools, final_response]
+        tools = ToolRepository()
+        for name in ("first", "second"):
+            tool = Mock()
+            tool.name = name
+            tool.description = name
+            tool.parameters = {"type": "object"}
+            tool.func.return_value = "ok"
+            tools.add_tool(tool)
+
+        hook = Mock()
+        Agent(llm, tools, hooks=[hook]).run(Context())
+
+        self.assertEqual(hook.on_tool_error.call_args.args[1], {})
+
     def test_tool_errors_are_added_to_context(self):
         calls = [
             SimpleNamespace(

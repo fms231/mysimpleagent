@@ -34,6 +34,22 @@ class LLMChatTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             LLM("custom/model", max_context=1001)
 
+    @patch("mysimpleagent.llm.llm.get_model_metadata", return_value={
+        "max_input_tokens": 900,
+        "max_output_tokens": 100,
+        "max_context_window": 800,
+    })
+    def test_context_window_takes_priority_over_input_output_sum(self, _get_metadata):
+        llm = LLM("custom/model")
+
+        self.assertEqual(llm.max_context, 800)
+
+    @patch("mysimpleagent.llm.llm.get_model_metadata", return_value={"max_input_tokens": 900})
+    def test_input_limit_is_used_when_context_window_is_missing(self, _get_metadata):
+        llm = LLM("custom/model")
+
+        self.assertEqual(llm.max_context, 900)
+
     @patch("mysimpleagent.llm.llm.litellm.completion")
     @patch("mysimpleagent.llm.llm.get_model_metadata", return_value={"max_tokens": 8192})
     def test_chat_max_tokens_override(self, _get_model_metadata, completion):

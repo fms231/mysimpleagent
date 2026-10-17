@@ -12,7 +12,7 @@ from pydantic import BaseModel, field_validator
 from mysimpleagent.agent.agent import Agent
 from mysimpleagent.conversation.conversation import Conversation
 from mysimpleagent.llm.llm import LLM
-from mysimpleagent.llm.model_info import get_model_metadata
+from mysimpleagent.llm.model_info import get_model_context_limit, get_model_metadata
 
 
 app = FastAPI(title="MySimpleAgent API")
@@ -36,17 +36,7 @@ def model_context_limit(model: str) -> int | None:
         metadata = get_model_metadata(model)
     except Exception:
         return None
-    input_tokens = metadata.get("max_input_tokens")
-    output_tokens = metadata.get("max_output_tokens")
-    if isinstance(input_tokens, int) and input_tokens > 0:
-        if isinstance(output_tokens, int) and output_tokens > 0:
-            return input_tokens + output_tokens
-        return input_tokens
-    for key in ("max_tokens", "max_context_window"):
-        value = metadata.get(key)
-        if isinstance(value, int) and value > 0:
-            return value
-    return None
+    return get_model_context_limit(metadata)
 
 
 def get_session_lock(session_id: str) -> Lock:
@@ -163,7 +153,11 @@ def chat(request: ChatRequest):
                 and request.max_context > max_context_limit
             ):
                 raise HTTPException(status_code=400, detail="max_context exceeds model limit")
-            request_agent = Agent(LLM(model=request.model, max_context=request.max_context))
+            try:
+                request_llm = LLM(model=request.model, max_context=request.max_context)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid model context limit")
+            request_agent = Agent(request_llm)
             conversation = Conversation(request_agent, session_id=request.session_id)
             if request.edit_message_id is None:
                 response = conversation.send(request.message)
