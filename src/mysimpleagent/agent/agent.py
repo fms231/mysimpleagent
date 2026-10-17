@@ -92,7 +92,15 @@ class Agent:
                         except Exception:
                             logger.exception("after_tool_call hook failed for tool '%s'", call.function.name)
                     if not isinstance(result, str):
-                        result = json.dumps(result, ensure_ascii=False)
+                        try:
+                            result = json.dumps(result, ensure_ascii=False)
+                        except Exception as error:
+                            for hook in self.hooks:
+                                hook.on_tool_error(call.function.name, arguments, error, context)
+                            result = (
+                                f"Tool '{call.function.name}' result could not be serialized: "
+                                f"{error}"
+                            )
                     break
                 context.add_message("tool", result, tool_call_id=call.id)
 

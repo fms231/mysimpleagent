@@ -4,9 +4,11 @@ import json
 class Context:
     messages: list[dict[str, str]]
 
-    def __init__(self):
+    def __init__(self, system_prompt: str | None = None):
         self.id = 0
         self.messages = []
+        if system_prompt is not None:
+            self.add_message("system", system_prompt)
 
     def add_message(self, role: str, content: str, **fields):
         message = {"id": self.id, "role": role, "content": content, **fields}

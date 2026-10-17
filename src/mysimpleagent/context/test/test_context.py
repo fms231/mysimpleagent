@@ -16,6 +16,21 @@ def test_add_message():
     assert context.id == 2
 
 
+def test_system_prompt_is_first_message():
+    context = Context(system_prompt="你是一个简洁的助手")
+
+    context.add_message("user", "你好")
+
+    assert context.messages == [
+        {"id": 0, "role": "system", "content": "你是一个简洁的助手"},
+        {"id": 1, "role": "user", "content": "你好"},
+    ]
+    assert context.model_messages()[0] == {
+        "role": "system",
+        "content": "你是一个简洁的助手",
+    }
+
+
 def test_save_and_load_messages():
     context = Context()
     context.add_message("user", "你好")

@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -8,6 +9,36 @@ from mysimpleagent.tools.tool_repository import ToolRepository
 
 
 class AgentToolErrorTest(unittest.TestCase):
+    def test_non_serializable_tool_result_becomes_tool_error_without_retry(self):
+        call = SimpleNamespace(
+            id="datetime-result",
+            function=SimpleNamespace(name="now", arguments="{}"),
+        )
+        tool_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[call]))]
+        )
+        final_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))]
+        )
+        llm = Mock()
+        llm.chat.side_effect = [tool_response, final_response]
+        tools = ToolRepository()
+        tool = Mock()
+        tool.name = "now"
+        tool.description = "return time"
+        tool.parameters = {"type": "object"}
+        tool.func.return_value = datetime.now()
+        tools.add_tool(tool)
+        context = Context()
+
+        result = Agent(llm, tools, max_tool_rounds=2).run(context)
+
+        self.assertIs(result, final_response)
+        tool.func.assert_called_once_with()
+        tool_message = [message for message in context.messages if message["role"] == "tool"][0]
+        self.assertEqual(tool_message["role"], "tool")
+        self.assertIn("could not be serialized", tool_message["content"])
+
     def test_after_hook_error_does_not_repeat_successful_tool(self):
         call = SimpleNamespace(
             id="side-effect",
