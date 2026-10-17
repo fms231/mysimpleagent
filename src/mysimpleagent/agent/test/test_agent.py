@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
+from unittest.mock import patch
 
 from mysimpleagent.agent.agent import Agent
 from mysimpleagent.context.context import Context
@@ -55,6 +56,22 @@ class AgentTest(unittest.TestCase):
             }],
         )
 
+    @patch("mysimpleagent.agent.agent.litellm.token_counter", return_value=80)
+    def test_logs_error_when_context_reaches_eighty_percent(self, _token_counter):
+        response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None))]
+        )
+        llm = Mock()
+        llm.model = "custom/model"
+        llm.max_context = 100
+        llm.chat.return_value = response
+
+        with self.assertLogs("mysimpleagent.agent.agent", level="ERROR") as logs:
+            Agent(llm, self._repository()).run(Context())
+
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("80.0%", logs.output[0])
+
     def test_run_keeps_messages_in_context(self):
         repository = self._repository()
         response = SimpleNamespace(
@@ -108,6 +125,37 @@ class AgentTest(unittest.TestCase):
             "tool_call_id": "call-1",
             "content": "5",
         }, second_messages)
+
+    def test_runs_tool_hooks_around_tool_call(self):
+        events = []
+
+        class Hook:
+            def before_tool_call(self, name, arguments, context):
+                events.append(("before", name, arguments))
+
+            def after_tool_call(self, name, arguments, result, context):
+                events.append(("after", name, result))
+
+            def on_tool_error(self, name, arguments, error, context):
+                events.append(("error", name, str(error)))
+
+        repository = self._repository()
+        tool_call = SimpleNamespace(
+            id="call-1",
+            function=SimpleNamespace(name="add", arguments='{"a": 2, "b": 3}'),
+        )
+        first_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[tool_call]))]
+        )
+        final_response = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(tool_calls=None))]
+        )
+        llm = Mock()
+        llm.chat.side_effect = [first_response, final_response]
+
+        Agent(llm, repository, hooks=[Hook()]).run(Context())
+
+        self.assertEqual(events, [("before", "add", {"a": 2, "b": 3}), ("after", "add", 5)])
 
 
 if __name__ == "__main__":

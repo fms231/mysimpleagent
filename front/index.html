@@ -18,8 +18,17 @@
 
     <section class="chat-panel">
       <header class="chat-header">
-        <div><h1>新的对话</h1><p>与你的 Agent 交流</p></div>
-        <span class="status"><i></i> 已连接</span>
+        <div><h1>新的对话</h1><p>与你的 AI 助手交流</p></div>
+        <div class="model-controls">
+          <label>模型
+            <select id="model-select" aria-label="选择模型"></select>
+          </label>
+          <label>最大上下文
+            <input id="max-context" type="number" min="1" placeholder="模型默认" aria-label="最大上下文" />
+          </label>
+          <span id="model-context-limit" class="model-context-limit"></span>
+          <span class="status"><i></i> 已连接</span>
+        </div>
       </header>
 
       <div class="messages" id="messages">

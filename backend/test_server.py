@@ -7,11 +7,20 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from backend.server import get_session, get_session_lock
+from backend.server import get_session, get_session_lock, model_context_limit
 from mysimpleagent.conversation.conversation import Conversation
 
 
 class SessionLockTest(unittest.TestCase):
+    @patch("backend.server.get_model_metadata")
+    def test_model_context_limit_includes_input_and_output_tokens(self, get_metadata):
+        get_metadata.return_value = {
+            "max_input_tokens": 922000,
+            "max_output_tokens": 128000,
+        }
+
+        self.assertEqual(model_context_limit("gpt-6-luna"), 1050000)
+
     def test_requests_for_same_session_share_lock(self):
         self.assertIs(get_session_lock("session-1"), get_session_lock("session-1"))
 

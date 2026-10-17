@@ -10,7 +10,7 @@ load_dotenv()
 
 class LLM(LLMConfig):
     def __init__(self, model: str = None, base_url: str = None,
-                 api_key: str = None, max_tokens: int = None,
+                 api_key: str = None, max_context: int = None,
                  ):
         if base_url is not None:
             self.base_url = base_url
@@ -23,21 +23,32 @@ class LLM(LLMConfig):
         self.model = model or os.getenv("MODEL_NAME")
         if not self.model:
             raise ValueError("MODEL_NAME must be set in the environment.")
-        if max_tokens is not None:
-            self.max_tokens = max_tokens
-        else:
-            try:
-                self.max_tokens = get_model_metadata(self.model).get("max_tokens")
-            except Exception:
-                self.max_tokens = None
+        try:
+            metadata = get_model_metadata(self.model)
+        except Exception:
+            metadata = {}
+        self.max_input_tokens = metadata.get("max_input_tokens")
+        self.max_output_tokens = metadata.get("max_output_tokens")
+        model_context = metadata.get("max_context_window")
+        if model_context is None and self.max_input_tokens and self.max_output_tokens:
+            model_context = self.max_input_tokens + self.max_output_tokens
+        if model_context is None:
+            model_context = metadata.get("max_tokens")
+        if max_context is not None and model_context is not None and max_context > model_context:
+            raise ValueError("max_context exceeds model context limit")
+        self.max_context = max_context if max_context is not None else model_context
 
     def get_model_metadata(self) -> dict:
         """Return model metadata provided by LiteLLM for the current model."""
         return get_model_metadata(self.model)
 
     def get_max_tokens(self) -> int | None:
-        """Return the maximum number of tokens for the current model."""
-        return self.max_tokens
+        """Return the configured total context limit."""
+        return self.max_context
+
+    def get_max_output_tokens(self) -> int | None:
+        """Return the model's maximum output token limit."""
+        return self.max_output_tokens
 
     def chat(self, messages: list[dict], **kwargs):
         """Send a chat request through LiteLLM and return its response."""
@@ -48,8 +59,15 @@ class LLM(LLMConfig):
             "api_key": self.api_key,
             **kwargs,
         }
-        if self.max_tokens is not None and "max_tokens" not in kwargs:
-            params["max_tokens"] = self.max_tokens
+        if self.max_context is not None and "max_tokens" not in kwargs:
+            input_tokens = litellm.token_counter(model=self.model, messages=messages)
+            remaining_tokens = self.max_context - input_tokens
+            if remaining_tokens <= 0:
+                raise ValueError("The input exceeds the configured context limit")
+            params["max_tokens"] = min(
+                remaining_tokens,
+                self.max_output_tokens or remaining_tokens,
+            )
 
         return litellm.completion(
             **params,
