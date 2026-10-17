@@ -50,11 +50,6 @@ class Context:
 
     def save_to_file(self, file_path: str):
         with open(file_path, "w", encoding="utf-8") as f:
-            if self.system_prompt is not None:
-                f.write(json.dumps(
-                    {"_context": {"system_prompt": self.system_prompt}},
-                    ensure_ascii=False,
-                ) + "\n")
             for message in self.messages:
                 f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
@@ -65,9 +60,6 @@ class Context:
             for line in f:
                 if line.strip():
                     message = json.loads(line)
-                    if "_context" in message:
-                        system_prompt = message["_context"].get("system_prompt")
-                        continue
                     messages.append(message)
         reserved_ids = {message["id"] for message in messages if "id" in message}
         assigned_ids = set()

@@ -16,17 +16,24 @@ class MCPToolRepository(ToolRepository):
         self._client_context = None
         self._loop = None
         self._loop_thread = None
+        self._connection_future = None
 
     async def connect(self):
+        if self._connection_future is not None:
+            await asyncio.wrap_future(self._connection_future)
+            return self
         if self._loop is not None:
             return self
         self._start_loop()
         future = asyncio.run_coroutine_threadsafe(self._connect_on_loop(), self._loop)
+        self._connection_future = future
         try:
             await asyncio.wrap_future(future)
         except BaseException:
+            self._connection_future = None
             self._stop_loop()
             raise
+        self._connection_future = None
         return self
 
     async def _connect_on_loop(self):
@@ -44,6 +51,7 @@ class MCPToolRepository(ToolRepository):
                     await context.__aexit__(type(error), error, error.__traceback__)
                 except BaseException:
                     pass
+                self.client = context
             self._client_context = None
             raise
 
@@ -81,6 +89,7 @@ class MCPToolRepository(ToolRepository):
             context = self._client_context
             self._client_context = None
             await context.__aexit__(None, None, None)
+            self.client = context
 
     def call(self, tool_name: str, **kwargs):
         if self.get_tool(tool_name) is None:

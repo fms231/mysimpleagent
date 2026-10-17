@@ -17,7 +17,40 @@ class RedactingHandler:
         event.messages[0]["content"] = "redacted"
 
 
+class ToolArgumentRedactor:
+    def on_tool_start(self, event):
+        event.arguments["content"] = "[REDACTED]"
+
+
 class SnapshotTest(unittest.TestCase):
+    def test_tool_handler_cannot_change_pending_arguments(self):
+        received = []
+        tool = ToolSchema()
+        tool.name = "write_file"
+        tool.description = ""
+        tool.parameters = {"type": "object"}
+        tool.func = lambda **kwargs: received.append(kwargs) or "ok"
+        tools = ToolRepository()
+        tools.add_tool(tool)
+        call = SimpleNamespace(
+            id="call-1",
+            function=SimpleNamespace(name="write_file", arguments='{"content": "secret"}'),
+        )
+        responses = iter([
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[call]))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))]),
+        ])
+
+        class LLM:
+            model = "test-model"
+
+            def chat(self, messages, **kwargs):
+                return next(responses)
+
+        Agent(LLM(), tools, observability=Observability([ToolArgumentRedactor()])).run(Context())
+
+        self.assertEqual(received, [{"content": "secret"}])
+
     def test_observability_can_bound_retained_events(self):
         observability = Observability(max_events=2)
 
@@ -97,6 +130,36 @@ class SnapshotTest(unittest.TestCase):
             "LLMStartEvent", "LLMEndEvent", "ToolStartEvent", "ToolErrorEvent",
             "LLMStartEvent", "LLMEndEvent",
         ])
+
+    def test_tool_end_event_keeps_native_result(self):
+        tool = ToolSchema()
+        tool.name = "returns_dict"
+        tool.description = ""
+        tool.parameters = {"type": "object"}
+        tool.func = lambda: {"value": 5}
+        tools = ToolRepository()
+        tools.add_tool(tool)
+
+        call = SimpleNamespace(
+            id="call-1",
+            function=SimpleNamespace(name="returns_dict", arguments="{}"),
+        )
+        responses = iter([
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None, tool_calls=[call]))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))]),
+        ])
+
+        class LLM:
+            model = "test-model"
+
+            def chat(self, messages, **kwargs):
+                return next(responses)
+
+        observability = Observability()
+        Agent(LLM(), tools, observability=observability).run(Context())
+
+        tool_end = next(event for event in observability.events if event.__class__.__name__ == "ToolEndEvent")
+        self.assertEqual(tool_end.result, {"value": 5})
 
 
 if __name__ == "__main__":

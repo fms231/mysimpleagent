@@ -31,6 +31,9 @@ class ToolStartEvent:
     name: str
     arguments: dict
 
+    def __post_init__(self):
+        self.arguments = deepcopy(self.arguments)
+
 
 @dataclass
 class ToolEndEvent:
@@ -39,6 +42,9 @@ class ToolEndEvent:
     result: Any
     duration_ms: float
 
+    def __post_init__(self):
+        self.arguments = deepcopy(self.arguments)
+
 
 @dataclass
 class ToolErrorEvent:
@@ -46,3 +52,6 @@ class ToolErrorEvent:
     arguments: dict
     error: Exception
     duration_ms: float
+
+    def __post_init__(self):
+        self.arguments = deepcopy(self.arguments)

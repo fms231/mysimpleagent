@@ -135,6 +135,7 @@ class Agent:
                         except Exception:
                             logger.exception("after_tool_call hook failed for tool '%s'", call.function.name)
                     serialization_succeeded = True
+                    event_result = result
                     if not isinstance(result, str):
                         try:
                             result = json.dumps(result, ensure_ascii=False)
@@ -162,7 +163,7 @@ class Agent:
                             ToolEndEvent(
                                 call.function.name,
                                 arguments,
-                                result,
+                                event_result,
                                 (perf_counter() - started) * 1000,
                             ),
                         )

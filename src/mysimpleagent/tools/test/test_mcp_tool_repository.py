@@ -52,7 +52,65 @@ class ContextMCPClient(FakeMCPClient):
         self.call_thread = threading.current_thread()
         return await super().call_tool(name, arguments)
 
+
+class SlowMCPClient(FakeMCPClient):
+    def __init__(self):
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    async def list_tools(self):
+        self.entered.set()
+        await asyncio.to_thread(self.release.wait)
+        return await super().list_tools()
+
+
+class DistinctContext:
+    def __init__(self):
+        self.enter_count = 0
+        self.exit_count = 0
+        self.clients = []
+
+    async def __aenter__(self):
+        self.enter_count += 1
+        client = ContextMCPClient()
+        self.clients.append(client)
+        return client
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        self.exit_count += 1
+
 class MCPToolRepositoryTest(unittest.TestCase):
+    def test_concurrent_connect_waits_for_discovery(self):
+        client = SlowMCPClient()
+        repository = MCPToolRepository(client)
+
+        async def exercise():
+            first = asyncio.create_task(repository.connect())
+            await asyncio.to_thread(client.entered.wait)
+            second = asyncio.create_task(repository.connect())
+            await asyncio.sleep(0)
+            self.assertFalse(second.done())
+            client.release.set()
+            await asyncio.gather(first, second)
+            await repository.close()
+
+        asyncio.run(exercise())
+        self.assertEqual([tool["function"]["name"] for tool in repository.list_tools()], ["add"])
+
+    def test_reconnect_reenters_original_context_manager(self):
+        context = DistinctContext()
+        repository = MCPToolRepository(context)
+
+        async def exercise():
+            await repository.connect()
+            await repository.close()
+            await repository.connect()
+            await repository.close()
+
+        asyncio.run(exercise())
+        self.assertEqual(context.enter_count, 2)
+        self.assertEqual(context.exit_count, 2)
+
     def test_connect_closes_client_when_discovery_fails(self):
         client = ContextMCPClient(fail_discovery=True)
         repository = MCPToolRepository(client)
