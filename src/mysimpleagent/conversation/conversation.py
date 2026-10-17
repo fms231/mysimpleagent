@@ -43,8 +43,8 @@ class Conversation:
     def send(self, input_text: str):
         previous_messages = deepcopy(self.context.messages)
         previous_id = self.context.id
-        self.context.add_message("user", input_text)
         try:
+            self.context.add_message("user", input_text)
             response = self.agent.run(self.context)
         except Exception:
             self.context.messages = previous_messages
@@ -57,8 +57,8 @@ class Conversation:
     def edit_and_send(self, message_id: int, input_text: str):
         previous_messages = deepcopy(self.context.messages)
         previous_id = self.context.id
-        self.context.replace_user_message(message_id, input_text)
         try:
+            self.context.replace_user_message(message_id, input_text)
             response = self.agent.run(self.context)
         except Exception:
             self.context.messages = previous_messages
