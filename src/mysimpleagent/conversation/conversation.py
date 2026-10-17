@@ -49,6 +49,7 @@ class Conversation:
         except Exception:
             self.context.messages = previous_messages
             self.context.id = previous_id
+            self.context._refresh_model_messages()
             raise
         if self.context.messages:
             self.context.save_to_file(str(self.session_file))
@@ -63,6 +64,7 @@ class Conversation:
         except Exception:
             self.context.messages = previous_messages
             self.context.id = previous_id
+            self.context._refresh_model_messages()
             raise
         if self.context.messages:
             self.context.save_to_file(str(self.session_file))

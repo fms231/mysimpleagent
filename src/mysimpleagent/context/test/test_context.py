@@ -22,8 +22,10 @@ def test_system_prompt_is_first_message():
     context.add_message("user", "你好")
 
     assert context.messages == [
-        {"id": 0, "role": "system", "content": "你是一个简洁的助手"},
-        {"id": 1, "role": "user", "content": "你好"},
+        {"id": 0, "role": "user", "content": "你好"},
+    ]
+    assert context.model_message == [
+        {"role": "user", "content": "你好"},
     ]
     assert context.model_messages()[0] == {
         "role": "system",
