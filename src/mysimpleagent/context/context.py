@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 
 from ..systemprompt import SystemPrompt
 
@@ -49,15 +50,24 @@ class Context:
 
     def save_to_file(self, file_path: str):
         with open(file_path, "w", encoding="utf-8") as f:
+            if self.system_prompt is not None:
+                f.write(json.dumps(
+                    {"_context": {"system_prompt": self.system_prompt}},
+                    ensure_ascii=False,
+                ) + "\n")
             for message in self.messages:
                 f.write(json.dumps(message, ensure_ascii=False) + "\n")
 
     def load_from_file(self, file_path: str):
         with open(file_path, "r", encoding="utf-8") as f:
             messages = []
+            system_prompt = self.system_prompt
             for line in f:
                 if line.strip():
                     message = json.loads(line)
+                    if "_context" in message:
+                        system_prompt = message["_context"].get("system_prompt")
+                        continue
                     messages.append(message)
         reserved_ids = {message["id"] for message in messages if "id" in message}
         assigned_ids = set()
@@ -72,6 +82,7 @@ class Context:
             assigned_ids.add(next_id)
             next_id += 1
         self.messages = messages
+        self.system_prompt = system_prompt
         self.id = max((message["id"] for message in messages), default=-1) + 1
         self._refresh_model_messages()
 
@@ -79,8 +90,8 @@ class Context:
         prompts = [self.system_prompt, *(extra_system_prompts or [])]
         prompts = [prompt for prompt in prompts if prompt]
         if not prompts:
-            return list(self.model_message)
+            return deepcopy(self.model_message)
 
         system_message = {"role": "system", "content": "\n\n".join(prompts)}
-        return [system_message, *self.model_message]
+        return [system_message, *deepcopy(self.model_message)]
     

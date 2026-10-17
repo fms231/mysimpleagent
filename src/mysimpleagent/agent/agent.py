@@ -129,26 +129,17 @@ class Agent:
                             )
                         continue
 
-                    if self.observability is not None:
-                        self.observability.emit(
-                            "on_tool_end",
-                            ToolEndEvent(
-                                call.function.name,
-                                arguments,
-                                result,
-                                (perf_counter() - started) * 1000,
-                            ),
-                        )
-
                     for hook in self.hooks:
                         try:
                             hook.after_tool_call(call.function.name, arguments, result, context)
                         except Exception:
                             logger.exception("after_tool_call hook failed for tool '%s'", call.function.name)
+                    serialization_succeeded = True
                     if not isinstance(result, str):
                         try:
                             result = json.dumps(result, ensure_ascii=False)
                         except Exception as error:
+                            serialization_succeeded = False
                             if self.observability is not None:
                                 self.observability.emit(
                                     "on_tool_error",
@@ -165,6 +156,16 @@ class Agent:
                                 f"Tool '{call.function.name}' result could not be serialized: "
                                 f"{error}"
                             )
+                    if self.observability is not None and serialization_succeeded:
+                        self.observability.emit(
+                            "on_tool_end",
+                            ToolEndEvent(
+                                call.function.name,
+                                arguments,
+                                result,
+                                (perf_counter() - started) * 1000,
+                            ),
+                        )
                     break
                 context.add_message("tool", result, tool_call_id=call.id)
 

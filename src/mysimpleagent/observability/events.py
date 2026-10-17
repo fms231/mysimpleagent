@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from copy import deepcopy
 from typing import Any
 
 
@@ -6,6 +7,9 @@ from typing import Any
 class LLMStartEvent:
     model: str
     messages: list[dict]
+
+    def __post_init__(self):
+        self.messages = deepcopy(self.messages)
 
 
 @dataclass
