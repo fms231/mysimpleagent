@@ -1,4 +1,5 @@
 import re
+from threading import Lock
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -23,6 +24,15 @@ app.add_middleware(
 agent = Agent(LLM())
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SESSIONS_DIR = Path("sessions")
+SESSION_LOCKS: dict[str, Lock] = {}
+SESSION_LOCKS_GUARD = Lock()
+
+
+def get_session_lock(session_id: str) -> Lock:
+    with SESSION_LOCKS_GUARD:
+        if session_id not in SESSION_LOCKS:
+            SESSION_LOCKS[session_id] = Lock()
+        return SESSION_LOCKS[session_id]
 
 
 class ChatRequest(BaseModel):
@@ -82,8 +92,9 @@ def get_session(session_id: str):
     if not file_path.is_file() or file_path.stat().st_size == 0:
         raise HTTPException(status_code=404, detail="Session not found")
     try:
-        conversation = Conversation(agent, session_id=session_id)
-        return {"session_id": session_id, "messages": conversation.context.messages}
+        with get_session_lock(session_id):
+            conversation = Conversation(agent, session_id=session_id)
+            return {"session_id": session_id, "messages": conversation.context.messages}
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -91,16 +102,17 @@ def get_session(session_id: str):
 @app.post("/api/chat")
 def chat(request: ChatRequest):
     try:
-        conversation = Conversation(agent, session_id=request.session_id)
-        if request.edit_message_id is None:
-            response = conversation.send(request.message)
-        else:
-            response = conversation.edit_and_send(request.edit_message_id, request.message)
-        content = response.choices[0].message.content
-        return {
-            "content": content,
-            "session_id": conversation.session_id,
-            "messages": conversation.context.messages,
-        }
+        with get_session_lock(request.session_id):
+            conversation = Conversation(agent, session_id=request.session_id)
+            if request.edit_message_id is None:
+                response = conversation.send(request.message)
+            else:
+                response = conversation.edit_and_send(request.edit_message_id, request.message)
+            content = response.choices[0].message.content
+            return {
+                "content": content,
+                "session_id": conversation.session_id,
+                "messages": conversation.context.messages,
+            }
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")

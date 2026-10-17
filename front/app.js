@@ -13,7 +13,7 @@ function addMessage(role, content, messageId = null) {
   item.className = `message ${role}`;
   item.innerHTML = `<div class="avatar">${role === 'user' ? '你' : '✦'}</div><div class="message-body"></div>`;
   item.querySelector('.message-body').textContent = content;
-  if (role === 'user' && messageId !== null) {
+  if (role === 'user' && messageId !== undefined && messageId !== null) {
     const edit = document.createElement('button');
     edit.className = 'edit-message';
     edit.textContent = '编辑';
@@ -62,9 +62,9 @@ function renderMessages(items) {
     list.innerHTML = '<div class="welcome"><div class="welcome-icon">✦</div><h2>有什么可以帮你？</h2><p>发送消息开始一次新的会话。</p></div>';
     return;
   }
-  items.forEach((item, index) => {
+  items.forEach((item) => {
     if (item.role === 'user') {
-      addMessage('user', item.content || '', item.id ?? index);
+      addMessage('user', item.content || '', item.id);
     } else if (item.role === 'assistant' && item.tool_calls?.length) {
       item.tool_calls.forEach((call) => addToolEvent(
         `调用工具：${call.function?.name || '未知工具'}`,
@@ -106,7 +106,7 @@ async function loadSession(id) {
 async function sendMessage(content, editMessageId = null) {
   if (editMessageId === null) {
     messages.push({ role: 'user', content });
-    addMessage('user', content, messages.length - 1);
+    addMessage('user', content);
   } else {
     const messageIndex = messages.findIndex((item) => item.id === editMessageId);
     if (messageIndex >= 0) {

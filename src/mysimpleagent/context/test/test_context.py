@@ -48,3 +48,18 @@ def test_load_failure_keeps_existing_messages():
         file_path.unlink()
 
     assert context.messages == [{"id": 0, "role": "user", "content": "已有消息"}]
+
+
+def test_load_assigns_missing_ids_without_colliding_with_explicit_ids(tmp_path):
+    file_path = tmp_path / "context.jsonl"
+    file_path.write_text(
+        '{"role": "user", "content": "missing"}\n'
+        '{"id": 0, "role": "assistant", "content": "explicit"}\n',
+        encoding="utf-8",
+    )
+
+    context = Context()
+    context.load_from_file(str(file_path))
+
+    assert [message["id"] for message in context.messages] == [1, 0]
+    assert context.id == 2

@@ -37,6 +37,40 @@ class ConversationTest(unittest.TestCase):
             {"id": 1, "role": "assistant", "content": "你好"},
         ])
 
+    def test_send_failure_restores_context_and_does_not_persist(self):
+        agent = Mock()
+        agent.run.side_effect = RuntimeError("LLM failed")
+        context = Context()
+        context.add_message("user", "existing")
+
+        with TemporaryDirectory() as directory:
+            conversation = Conversation(agent, context, session_id="session-1", sessions_dir=directory)
+            with self.assertRaisesRegex(RuntimeError, "LLM failed"):
+                conversation.send("new")
+
+            self.assertEqual(context.messages, [{"id": 0, "role": "user", "content": "existing"}])
+            self.assertFalse((Path(directory) / "session-1.jsonl").exists())
+
+    def test_edit_failure_restores_context_and_saved_history(self):
+        agent = Mock()
+        agent.run.side_effect = RuntimeError("LLM failed")
+        context = Context()
+        context.add_message("user", "a1")
+        context.add_message("assistant", "b1")
+        context.add_message("user", "a2")
+        context.add_message("assistant", "b2")
+
+        with TemporaryDirectory() as directory:
+            conversation = Conversation(agent, context, session_id="session-1", sessions_dir=directory)
+            conversation.context.save_to_file(str(conversation.session_file))
+            original_file = conversation.session_file.read_text(encoding="utf-8")
+
+            with self.assertRaisesRegex(RuntimeError, "LLM failed"):
+                conversation.edit_and_send(2, "a2-edited")
+
+            self.assertEqual([message["content"] for message in context.messages], ["a1", "b1", "a2", "b2"])
+            self.assertEqual(conversation.session_file.read_text(encoding="utf-8"), original_file)
+
     def test_rejects_unsafe_session_id(self):
         with self.assertRaises(ValueError):
             Conversation(Mock(), session_id="../../outside")

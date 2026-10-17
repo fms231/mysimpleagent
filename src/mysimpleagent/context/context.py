@@ -23,7 +23,6 @@ class Context:
         if self.messages[message_index].get("role") != "user":
             raise ValueError("Only user messages can be replaced")
         self.messages = self.messages[:message_index]
-        self.id = len(self.messages)
         self.add_message("user", content)
 
     def save_to_file(self, file_path: str):
@@ -37,9 +36,16 @@ class Context:
             for line in f:
                 if line.strip():
                     message = json.loads(line)
-                    if "id" not in message:
-                        message["id"] = len(messages)
                     messages.append(message)
+        used_ids = {message["id"] for message in messages if "id" in message}
+        next_id = 0
+        for message in messages:
+            if "id" not in message:
+                while next_id in used_ids:
+                    next_id += 1
+                message["id"] = next_id
+                used_ids.add(next_id)
+                next_id += 1
         self.messages = messages
         self.id = max((message["id"] for message in messages), default=-1) + 1
 

@@ -16,9 +16,24 @@ class ContextEditTest(unittest.TestCase):
         self.assertEqual(context.messages, [
             {"id": 0, "role": "user", "content": "a1"},
             {"id": 1, "role": "assistant", "content": "b1"},
-            {"id": 2, "role": "user", "content": "a2-new"},
+            {"id": 4, "role": "user", "content": "a2-new"},
         ])
-        self.assertEqual(context.id, 3)
+        self.assertEqual(context.id, 5)
+
+
+    def test_edit_keeps_next_id_monotonic_when_history_has_gaps(self):
+        context = Context()
+        context.messages = [
+            {"id": 2, "role": "user", "content": "a1"},
+            {"id": 7, "role": "user", "content": "a2"},
+            {"id": 9, "role": "assistant", "content": "b2"},
+        ]
+        context.id = 10
+
+        context.replace_user_message(7, "a2-new")
+
+        self.assertEqual(context.messages[-1]["id"], 10)
+        self.assertEqual(context.id, 11)
 
 
 if __name__ == "__main__":
