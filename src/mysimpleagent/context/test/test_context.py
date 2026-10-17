@@ -63,3 +63,18 @@ def test_load_assigns_missing_ids_without_colliding_with_explicit_ids(tmp_path):
 
     assert [message["id"] for message in context.messages] == [1, 0]
     assert context.id == 2
+
+
+def test_load_reassigns_duplicate_explicit_ids(tmp_path):
+    file_path = tmp_path / "duplicate_ids.jsonl"
+    file_path.write_text(
+        '{"id": 0, "role": "user", "content": "first"}\n'
+        '{"id": 0, "role": "user", "content": "second"}\n',
+        encoding="utf-8",
+    )
+
+    context = Context()
+    context.load_from_file(str(file_path))
+
+    assert [message["id"] for message in context.messages] == [0, 1]
+    assert len({message["id"] for message in context.messages}) == len(context.messages)

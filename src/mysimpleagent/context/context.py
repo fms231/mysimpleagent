@@ -37,15 +37,18 @@ class Context:
                 if line.strip():
                     message = json.loads(line)
                     messages.append(message)
-        used_ids = {message["id"] for message in messages if "id" in message}
+        reserved_ids = {message["id"] for message in messages if "id" in message}
+        assigned_ids = set()
         next_id = 0
         for message in messages:
-            if "id" not in message:
-                while next_id in used_ids:
-                    next_id += 1
-                message["id"] = next_id
-                used_ids.add(next_id)
+            if "id" in message and message["id"] not in assigned_ids:
+                assigned_ids.add(message["id"])
+                continue
+            while next_id in reserved_ids or next_id in assigned_ids:
                 next_id += 1
+            message["id"] = next_id
+            assigned_ids.add(next_id)
+            next_id += 1
         self.messages = messages
         self.id = max((message["id"] for message in messages), default=-1) + 1
 

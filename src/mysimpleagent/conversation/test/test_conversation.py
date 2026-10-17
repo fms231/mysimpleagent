@@ -39,9 +39,14 @@ class ConversationTest(unittest.TestCase):
 
     def test_send_failure_restores_context_and_does_not_persist(self):
         agent = Mock()
-        agent.run.side_effect = RuntimeError("LLM failed")
         context = Context()
         context.add_message("user", "existing")
+
+        def mutate_then_fail(current_context):
+            current_context.messages[0]["content"] = "mutated"
+            raise RuntimeError("LLM failed")
+
+        agent.run.side_effect = mutate_then_fail
 
         with TemporaryDirectory() as directory:
             conversation = Conversation(agent, context, session_id="session-1", sessions_dir=directory)
@@ -53,12 +58,17 @@ class ConversationTest(unittest.TestCase):
 
     def test_edit_failure_restores_context_and_saved_history(self):
         agent = Mock()
-        agent.run.side_effect = RuntimeError("LLM failed")
         context = Context()
         context.add_message("user", "a1")
         context.add_message("assistant", "b1")
         context.add_message("user", "a2")
         context.add_message("assistant", "b2")
+
+        def mutate_then_fail(current_context):
+            current_context.messages[0]["content"] = "mutated"
+            raise RuntimeError("LLM failed")
+
+        agent.run.side_effect = mutate_then_fail
 
         with TemporaryDirectory() as directory:
             conversation = Conversation(agent, context, session_id="session-1", sessions_dir=directory)

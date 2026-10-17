@@ -1,4 +1,5 @@
 import re
+from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,7 +31,7 @@ class Conversation:
                 self.context.load_from_file(str(self.session_file))
 
     def send(self, input_text: str):
-        previous_messages = self.context.messages.copy()
+        previous_messages = deepcopy(self.context.messages)
         previous_id = self.context.id
         self.context.add_message("user", input_text)
         try:
@@ -44,7 +45,7 @@ class Conversation:
         return response
 
     def edit_and_send(self, message_id: int, input_text: str):
-        previous_messages = self.context.messages.copy()
+        previous_messages = deepcopy(self.context.messages)
         previous_id = self.context.id
         self.context.replace_user_message(message_id, input_text)
         try:

@@ -89,12 +89,14 @@ def get_session(session_id: str):
     if not SESSION_ID_PATTERN.fullmatch(session_id):
         raise HTTPException(status_code=400, detail="Invalid request")
     file_path = SESSIONS_DIR / f"{session_id}.jsonl"
-    if not file_path.is_file() or file_path.stat().st_size == 0:
-        raise HTTPException(status_code=404, detail="Session not found")
     try:
         with get_session_lock(session_id):
+            if not file_path.is_file() or file_path.stat().st_size == 0:
+                raise HTTPException(status_code=404, detail="Session not found")
             conversation = Conversation(agent, session_id=session_id)
             return {"session_id": session_id, "messages": conversation.context.messages}
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")
 
