@@ -50,6 +50,14 @@ conversation = Conversation(agent)
 
 ## 工具
 
+如果创建 `Agent` 时不传入工具仓库，会自动注入 `BaseTools`，包含：
+
+- `get_system_time`：获取系统时间
+- `read_file`：读取 `output/` 下的 UTF-8 文件
+- `write_file`：写入 `output/` 下的 UTF-8 文件
+
+文件工具会拒绝访问 `output/` 目录之外的路径。自定义工具仓库可以通过 `Agent(llm, tools)` 传入。
+
 工具由 `ToolRepository` 管理，工具描述使用 LiteLLM/OpenAI 兼容的 function 格式：
 
 ```python
@@ -109,15 +117,36 @@ Content-Type: application/json
 }
 ```
 
+修改已有用户消息时，传入该消息在 context 中的零基索引 `edit_message_id`。后端会删除这条消息之后的旧回答，重新调用 Agent，并返回新的完整消息列表：
+
+```json
+{
+  "message": "修改后的内容",
+  "session_id": "已有会话 ID",
+  "edit_message_id": 2
+}
+```
+
 前端支持 `content`、`message`、`response` 和 OpenAI 风格的响应字段。
 
-启动项目自带的本地后端：
+启动项目自带的 FastAPI 后端：
 
 ```bash
-uv run python backend/server.py
+uv run uvicorn backend.server:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 后端地址为 `http://localhost:8000`，前端页面会向该地址发送请求。
+
+会话接口：
+
+```http
+GET /api/sessions
+GET /api/sessions/<session_id>
+```
+
+前端启动时会读取会话列表，点击会话后加载对应的 JSONL 消息记录。空的会话文件会被忽略，新的空会话也不会写入文件。
+
+FastAPI 文档地址：`http://localhost:8000/docs`
 
 ## 测试
 
