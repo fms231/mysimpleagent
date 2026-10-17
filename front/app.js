@@ -6,6 +6,49 @@ const send = document.querySelector('#send-button');
 const API_URL = window.MYSIMPLEAGENT_API_URL || 'http://localhost:8000';
 let sessionId = crypto.randomUUID();
 const conversationList = document.querySelector('#conversation-list');
+const modelSelect = document.querySelector('#model-select');
+const maxContextInput = document.querySelector('#max-context');
+const modelContextLimitLabel = document.querySelector('#model-context-limit');
+let modelContextLimit = null;
+
+function formatTokenLimit(value) {
+  if (!value) return '';
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1).replace(/\.0$/, '')}M tokens`;
+  if (value >= 1000) return `${Math.round(value / 1000)}K tokens`;
+  return `${value} tokens`;
+}
+
+function updateContextLimit(model) {
+  const option = [...modelSelect.options].find((item) => item.value === model);
+  modelContextLimit = option?.dataset.maxContext ? Number(option.dataset.maxContext) : null;
+  if (modelContextLimit) {
+    maxContextInput.max = modelContextLimit;
+    maxContextInput.placeholder = `最多 ${formatTokenLimit(modelContextLimit)}`;
+    if (Number(maxContextInput.value) > modelContextLimit) maxContextInput.value = modelContextLimit;
+    modelContextLimitLabel.textContent = `模型上限：${formatTokenLimit(modelContextLimit)}`;
+  } else {
+    maxContextInput.removeAttribute('max');
+    maxContextInput.placeholder = '模型默认';
+    modelContextLimitLabel.textContent = '模型上限未知';
+  }
+}
+
+async function loadModels() {
+  try {
+    const response = await fetch(`${API_URL}/api/models`);
+    if (!response.ok) return;
+    const data = await response.json();
+    modelSelect.innerHTML = '';
+    data.models.forEach((model) => {
+      const option = document.createElement('option');
+      option.value = model.name;
+      option.textContent = model.display_name || model.name;
+      if (model.max_context) option.dataset.maxContext = model.max_context;
+      modelSelect.appendChild(option);
+    });
+    if (modelSelect.options.length) updateContextLimit(modelSelect.value);
+  } catch (_) { /* 后端未启动时保留空模型选择 */ }
+}
 
 function addMessage(role, content, messageId = null) {
   document.querySelector('.welcome')?.remove();
@@ -120,9 +163,17 @@ async function sendMessage(content, editMessageId = null) {
   }
   send.disabled = true;
   try {
+    const maxContext = maxContextInput.value ? Number(maxContextInput.value) : null;
     const response = await fetch(`${API_URL}/api/chat`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: content, messages, session_id: sessionId, edit_message_id: editMessageId }),
+      body: JSON.stringify({
+        message: content,
+        messages,
+        session_id: sessionId,
+        edit_message_id: editMessageId,
+        model: modelSelect.value,
+        max_context: maxContext,
+      }),
     });
     if (!response.ok) throw new Error(`请求失败（${response.status}）`);
     const data = await response.json();
@@ -144,4 +195,11 @@ async function sendMessage(content, editMessageId = null) {
 form.addEventListener('submit', (event) => { event.preventDefault(); const content = input.value.trim(); if (!content || send.disabled) return; input.value = ''; sendMessage(content); });
 input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
 document.querySelector('#new-chat').addEventListener('click', () => { messages.length = 0; sessionId = crypto.randomUUID(); renderMessages([]); input.focus(); });
+modelSelect.addEventListener('change', () => updateContextLimit(modelSelect.value));
+maxContextInput.addEventListener('input', () => {
+  if (modelContextLimit && Number(maxContextInput.value) > modelContextLimit) {
+    maxContextInput.value = modelContextLimit;
+  }
+});
+loadModels();
 loadSessions();

@@ -1,4 +1,5 @@
 import re
+import os
 from threading import Lock
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel, field_validator
 from mysimpleagent.agent.agent import Agent
 from mysimpleagent.conversation.conversation import Conversation
 from mysimpleagent.llm.llm import LLM
+from mysimpleagent.llm.model_info import get_model_context_limit, get_model_metadata
 
 
 app = FastAPI(title="MySimpleAgent API")
@@ -26,6 +28,15 @@ SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 SESSIONS_DIR = Path("sessions")
 SESSION_LOCKS: dict[str, Lock] = {}
 SESSION_LOCKS_GUARD = Lock()
+MODEL_OPTIONS = [os.getenv("MODEL_NAME") or "gpt-6-luna"]
+
+
+def model_context_limit(model: str) -> int | None:
+    try:
+        metadata = get_model_metadata(model)
+    except Exception:
+        return None
+    return get_model_context_limit(metadata)
 
 
 def get_session_lock(session_id: str) -> Lock:
@@ -39,6 +50,8 @@ class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
     edit_message_id: int | None = None
+    model: str = MODEL_OPTIONS[0]
+    max_context: int | None = None
 
     @field_validator("message")
     @classmethod
@@ -59,6 +72,20 @@ class ChatRequest(BaseModel):
     def edit_message_id_must_be_non_negative(cls, value: int | None) -> int | None:
         if value is not None and value < 0:
             raise ValueError("invalid edit_message_id")
+        return value
+
+    @field_validator("model")
+    @classmethod
+    def model_must_be_available(cls, value: str) -> str:
+        if value not in MODEL_OPTIONS:
+            raise ValueError("invalid model")
+        return value
+
+    @field_validator("max_context")
+    @classmethod
+    def max_context_must_be_positive(cls, value: int | None) -> int | None:
+        if value is not None and value <= 0:
+            raise ValueError("invalid max_context")
         return value
 
 
@@ -84,6 +111,20 @@ def list_sessions():
     return {"sessions": sessions}
 
 
+@app.get("/api/models")
+def list_models():
+    return {
+        "models": [
+            {
+                "name": model,
+                "display_name": model.rsplit("/", 1)[-1],
+                "max_context": model_context_limit(model),
+            }
+            for model in MODEL_OPTIONS
+        ]
+    }
+
+
 @app.get("/api/sessions/{session_id}")
 def get_session(session_id: str):
     if not SESSION_ID_PATTERN.fullmatch(session_id):
@@ -105,7 +146,19 @@ def get_session(session_id: str):
 def chat(request: ChatRequest):
     try:
         with get_session_lock(request.session_id):
-            conversation = Conversation(agent, session_id=request.session_id)
+            max_context_limit = model_context_limit(request.model)
+            if (
+                request.max_context is not None
+                and max_context_limit is not None
+                and request.max_context > max_context_limit
+            ):
+                raise HTTPException(status_code=400, detail="max_context exceeds model limit")
+            try:
+                request_llm = LLM(model=request.model, max_context=request.max_context)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid model context limit")
+            request_agent = Agent(request_llm)
+            conversation = Conversation(request_agent, session_id=request.session_id)
             if request.edit_message_id is None:
                 response = conversation.send(request.message)
             else:
@@ -116,5 +169,7 @@ def chat(request: ChatRequest):
                 "session_id": conversation.session_id,
                 "messages": conversation.context.messages,
             }
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -2,6 +2,7 @@ from .agent.agent import Agent
 from .conversation.conversation import Conversation
 from .llm.llm import LLM
 from .tools.tool_repository import ToolRepository
+from .hooks import ToolHook
 
 
 def main() -> Conversation:
