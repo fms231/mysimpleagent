@@ -8,6 +8,41 @@ from mysimpleagent.conversation.conversation import Conversation
 
 
 class ConversationTest(unittest.TestCase):
+    def test_send_strategy_failure_restores_context(self):
+        class RejectMessage:
+            def check(self, context):
+                raise ValueError("message rejected")
+
+        context = Context(context_strategy=RejectMessage())
+        context.messages = [{"id": 4, "role": "user", "content": "existing"}]
+        context.id = 5
+        conversation = Conversation(Mock(), context)
+
+        with self.assertRaisesRegex(ValueError, "message rejected"):
+            conversation.send("new")
+
+        self.assertEqual(context.messages, [{"id": 4, "role": "user", "content": "existing"}])
+        self.assertEqual(context.id, 5)
+
+    def test_edit_strategy_failure_restores_context(self):
+        class RejectMessage:
+            def check(self, context):
+                raise ValueError("message rejected")
+
+        context = Context()
+        context.add_message("user", "first")
+        context.add_message("assistant", "answer")
+        context.context_strategy = RejectMessage()
+        original_messages = [message.copy() for message in context.messages]
+        original_id = context.id
+        conversation = Conversation(Mock(), context)
+
+        with self.assertRaisesRegex(ValueError, "message rejected"):
+            conversation.edit_and_send(0, "edited")
+
+        self.assertEqual(context.messages, original_messages)
+        self.assertEqual(context.id, original_id)
+
     def test_send_uses_conversation_context(self):
         agent = Mock()
         response = object()

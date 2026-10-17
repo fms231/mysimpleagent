@@ -138,15 +138,22 @@ async function loadSessions() {
 }
 
 async function loadSession(id) {
-  const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(id)}`);
-  if (!response.ok) return;
-  const data = await response.json();
-  sessionId = data.session_id;
-  messages.splice(0, messages.length, ...data.messages);
-  renderMessages(data.messages);
+  try {
+    const response = await fetch(`${API_URL}/api/sessions/${encodeURIComponent(id)}`);
+    if (!response.ok) throw new Error(`请求失败（${response.status}）`);
+    const data = await response.json();
+    const sessionMessages = data.messages ?? [];
+    sessionId = data.session_id;
+    messages.splice(0, messages.length, ...sessionMessages);
+    renderMessages(sessionMessages);
+  } catch (error) {
+    addMessage('assistant', `加载会话失败：${error.message}`);
+  }
 }
 
 async function sendMessage(content, editMessageId = null) {
+  if (send.disabled) return;
+  send.disabled = true;
   if (editMessageId === null) {
     messages.push({ role: 'user', content });
     addMessage('user', content);
@@ -161,7 +168,6 @@ async function sendMessage(content, editMessageId = null) {
       renderMessages(messages);
     }
   }
-  send.disabled = true;
   try {
     const maxContext = maxContextInput.value ? Number(maxContextInput.value) : null;
     const response = await fetch(`${API_URL}/api/chat`, {
