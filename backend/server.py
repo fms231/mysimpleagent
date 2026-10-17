@@ -1,63 +1,106 @@
-import json
 import re
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, field_validator
 
 from mysimpleagent.agent.agent import Agent
 from mysimpleagent.conversation.conversation import Conversation
 from mysimpleagent.llm.llm import LLM
-from mysimpleagent.tools.tool_repository import ToolRepository
 
 
-agent = Agent(LLM(), ToolRepository())
+app = FastAPI(title="MySimpleAgent API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+)
+
+agent = Agent(LLM())
 SESSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+SESSIONS_DIR = Path("sessions")
 
 
-class ChatHandler(BaseHTTPRequestHandler):
-    def _send_json(self, status, body=None):
-        payload = b"" if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
-        if body is not None:
-            self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        if payload:
-            self.wfile.write(payload)
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str = "default"
+    edit_message_id: int | None = None
 
-    def do_OPTIONS(self):
-        self._send_json(204)
+    @field_validator("message")
+    @classmethod
+    def message_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("message must be a non-empty string")
+        return value
 
-    def do_POST(self):
-        if self.path != "/api/chat":
-            self._send_json(404, {"error": "Not found"})
-            return
+    @field_validator("session_id")
+    @classmethod
+    def session_id_must_be_safe(cls, value: str) -> str:
+        if not SESSION_ID_PATTERN.fullmatch(value):
+            raise ValueError("invalid session_id")
+        return value
 
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            request = json.loads(self.rfile.read(length))
-            if not isinstance(request, dict):
-                raise ValueError("request must be an object")
-            message = request.get("message")
-            session_id = request.get("session_id", "default")
-            if not isinstance(message, str) or not message.strip():
-                raise ValueError("message must be a non-empty string")
-            if not isinstance(session_id, str) or not SESSION_ID_PATTERN.fullmatch(session_id):
-                raise ValueError("invalid session_id")
-            conversation = Conversation(agent, session_id=session_id)
-            response = conversation.send(message)
-            content = response.choices[0].message.content
-            self._send_json(200, {"content": content, "session_id": conversation.session_id})
-        except (ValueError, TypeError, json.JSONDecodeError):
-            self._send_json(400, {"error": "Invalid request"})
-        except Exception:
-            self._send_json(500, {"error": "Internal server error"})
-
-    def log_message(self, format, *args):
-        return
+    @field_validator("edit_message_id")
+    @classmethod
+    def edit_message_id_must_be_non_negative(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("invalid edit_message_id")
+        return value
 
 
-if __name__ == "__main__":
-    print("Backend listening at http://localhost:8000")
-    HTTPServer(("localhost", 8000), ChatHandler).serve_forever()
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(_, __):
+    return JSONResponse(status_code=400, content={"error": "Invalid request"})
+
+
+@app.get("/api/sessions")
+def list_sessions():
+    sessions = []
+    SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+    for file_path in SESSIONS_DIR.glob("*.jsonl"):
+        if file_path.stat().st_size == 0:
+            continue
+        session_id = file_path.stem
+        if SESSION_ID_PATTERN.fullmatch(session_id):
+            sessions.append({
+                "session_id": session_id,
+                "updated_at": file_path.stat().st_mtime,
+            })
+    sessions.sort(key=lambda item: item["updated_at"], reverse=True)
+    return {"sessions": sessions}
+
+
+@app.get("/api/sessions/{session_id}")
+def get_session(session_id: str):
+    if not SESSION_ID_PATTERN.fullmatch(session_id):
+        raise HTTPException(status_code=400, detail="Invalid request")
+    file_path = SESSIONS_DIR / f"{session_id}.jsonl"
+    if not file_path.is_file() or file_path.stat().st_size == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+    try:
+        conversation = Conversation(agent, session_id=session_id)
+        return {"session_id": session_id, "messages": conversation.context.messages}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/api/chat")
+def chat(request: ChatRequest):
+    try:
+        conversation = Conversation(agent, session_id=request.session_id)
+        if request.edit_message_id is None:
+            response = conversation.send(request.message)
+        else:
+            response = conversation.edit_and_send(request.edit_message_id, request.message)
+        content = response.choices[0].message.content
+        return {
+            "content": content,
+            "session_id": conversation.session_id,
+            "messages": conversation.context.messages,
+        }
+    except Exception:
+        raise HTTPException(status_code=500, detail="Internal server error")

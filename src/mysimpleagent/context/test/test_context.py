@@ -9,7 +9,11 @@ def test_add_message():
 
     context.add_message("user", "你好")
 
-    assert context.messages == [{"role": "user", "content": "你好"}]
+    assert context.messages == [{"id": 0, "role": "user", "content": "你好"}]
+    assert context.id == 1
+
+    context.add_message("assistant", "你好")
+    assert context.id == 2
 
 
 def test_save_and_load_messages():
@@ -21,12 +25,13 @@ def test_save_and_load_messages():
     context.save_to_file(str(file_path))
 
     lines = file_path.read_text(encoding="utf-8").splitlines()
-    assert json.loads(lines[0]) == {"role": "user", "content": "你好"}
+    assert json.loads(lines[0]) == {"id": 0, "role": "user", "content": "你好"}
 
     loaded_context = Context()
     loaded_context.load_from_file(str(file_path))
 
     assert loaded_context.messages == context.messages
+    assert loaded_context.id == 2
 
 
 def test_load_failure_keeps_existing_messages():
@@ -42,4 +47,4 @@ def test_load_failure_keeps_existing_messages():
     finally:
         file_path.unlink()
 
-    assert context.messages == [{"role": "user", "content": "已有消息"}]
+    assert context.messages == [{"id": 0, "role": "user", "content": "已有消息"}]

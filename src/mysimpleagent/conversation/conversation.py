@@ -30,7 +30,17 @@ class Conversation:
                 self.context.load_from_file(str(self.session_file))
 
     def send(self, input_text: str):
+        self.context.add_message("user", input_text)
         try:
-            return self.agent.run(input_text, self.context)
+            return self.agent.run(self.context)
         finally:
-            self.context.save_to_file(str(self.session_file))
+            if self.context.messages:
+                self.context.save_to_file(str(self.session_file))
+
+    def edit_and_send(self, message_id: int, input_text: str):
+        self.context.replace_user_message(message_id, input_text)
+        try:
+            return self.agent.run(self.context)
+        finally:
+            if self.context.messages:
+                self.context.save_to_file(str(self.session_file))

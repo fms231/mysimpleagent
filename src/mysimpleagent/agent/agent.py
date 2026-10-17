@@ -1,6 +1,7 @@
 import json
 
 from ..context.context import Context
+from ..tools.base_tools import BaseTools
 from ..tools.tool_repository import ToolRepository
 
 
@@ -8,20 +9,17 @@ class Agent:
     def __init__(
         self,
         llm,
-        tools: ToolRepository,
+        tools: ToolRepository | None = None,
         max_tool_rounds: int = 10,
     ):
         self.llm = llm
-        self.tools = tools
+        self.tools = tools if tools is not None else BaseTools()
         self.max_tool_rounds = max_tool_rounds
 
-    def run(self, input_text: str, context: Context):
-        context.add_message("user", input_text)
-
-        tool_rounds = 0
+    def run(self, context: Context):
         while True:
             response = self.llm.chat(
-                context.messages,
+                context.model_messages(),
                 tools=self.tools.list_tools(),
             )
 
@@ -31,13 +29,10 @@ class Agent:
                 context.add_message("assistant", getattr(message, "content", None) or "")
                 return response
 
-            if tool_rounds >= self.max_tool_rounds:
-                raise RuntimeError("Maximum tool call rounds exceeded.")
-
-            context.messages.append({
-                "role": "assistant",
-                "content": getattr(message, "content", None),
-                "tool_calls": [
+            context.add_message(
+                "assistant",
+                getattr(message, "content", None),
+                tool_calls=[
                     {
                         "id": call.id,
                         "type": "function",
@@ -48,20 +43,22 @@ class Agent:
                     }
                     for call in tool_calls
                 ],
-            })
+            )
 
             for call in tool_calls:
-                try:
-                    arguments = json.loads(call.function.arguments)
-                    result = self.tools.call(call.function.name, **arguments)
-                    if not isinstance(result, str):
-                        result = json.dumps(result, ensure_ascii=False)
-                except Exception as error:
-                    result = f"Tool error: {error}"
-                context.messages.append({
-                    "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": result,
-                })
+                result = None
+                for attempt in range(self.max_tool_rounds + 1):
+                    try:
+                        arguments = json.loads(call.function.arguments)
+                        result = self.tools.call(call.function.name, **arguments)
+                        if not isinstance(result, str):
+                            result = json.dumps(result, ensure_ascii=False)
+                        break
+                    except Exception as error:
+                        if attempt == self.max_tool_rounds:
+                            result = (
+                                f"Tool '{call.function.name}' is unavailable after "
+                                f"{self.max_tool_rounds} failed retries: {error}"
+                            )
+                context.add_message("tool", result, tool_call_id=call.id)
 
-            tool_rounds += 1
